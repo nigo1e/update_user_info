@@ -145,3 +145,129 @@ example='''
     "目标是否有房": "", "目标是否有车": "", "目标身材": "身材好", "目标气质": "，偏御姐型"
     }
 '''
+from openai import OpenAI
+import json
+import jionlp as jio
+import pandas as pd
+from datetime import datetime
+class UserLabelsExtractor:
+    def __init__(self):
+        self.client = OpenAI(
+            base_url="https://ark.cn-beijing.volces.com/api/v3",
+            api_key="2a5364ab-5afa-4639-932c-b915d0ee4ade",
+        )
+        self.ageTag = ["00后", "95后", "90后", "85后", "80后"]
+        # 年龄标签对应的出生年份阈值：2000+, 1995-1999, 1990-1994, 1985-1989, 1980-1984
+        self.ageThresholds = [2000, 1995, 1990, 1985, 1980]
+
+    def parse_location(self, location):
+        """
+        仅保留符合 'xx省-xx市-xx县/区' 的格式，多地用 | 分隔
+        """
+        if not location or pd.isna(location):
+            return ''
+        
+        # 处理列表或字符串类型
+        if isinstance(location, list):
+            locations = location
+        else:
+            locations = location.split('|')
+        
+        ans = []
+        for loc in locations:
+            if not loc or not isinstance(loc, str):
+                continue
+                
+            loc = loc.strip()
+            parsed = jio.parse_location(loc)
+            province = parsed.get('province', '')
+            city = parsed.get('city', '')
+            county = parsed.get('county', '') 
+            formatted = '-'.join([p for p in [province, city, county] if p])
+            if formatted:  # 确保格式化后不为空
+                ans.append(formatted)
+
+        return '|'.join(ans)
+
+    def get_age_label(self, age_str):
+        """
+        根据年龄字符串计算年龄标签
+        使用阈值计算法匹配出生年份对应的标签
+        """
+        if not age_str:
+            return ""
+            
+        try:
+            age = int(age_str)
+        except ValueError:
+            return ""
+            
+        current_year = datetime.now().year
+        birth_year = current_year - age
+        
+        # 检查年龄是否在合理范围
+        if birth_year < 1900 or birth_year > current_year:
+            return ""
+        
+        # 根据出生年份匹配标签
+        for i, th in enumerate(self.ageThresholds):
+            if birth_year >= th:
+                return self.ageTag[i]
+                
+        return ""  # 如果年份太早，则返回空
+
+    def extract_user_labels(self, context):
+        context_str = json.dumps(context, ensure_ascii=False)
+        messages = [
+            {"role": "system", "content": chat_prompt},
+            {"role": "assistant", "content": example},
+            {"role": "user", "content": context_str},
+        ]
+        
+        try:
+            completion = self.client.chat.completions.create(
+                model="ep-20250424162632-mbdnk",
+                messages=messages,
+            )
+            result = completion.choices[0].message.content
+            parsed_json = json.loads(result)
+            
+            # 直接保留学历和收入标签
+            parsed_json["学历标签"] = parsed_json.get("学历", "")
+            parsed_json["收入标签"] = parsed_json.get("收入", "")
+            
+            # 计算年龄标签
+            age_str = parsed_json.get("年龄", "")
+            parsed_json["年龄标签"] = self.get_age_label(age_str)
+            
+            # 处理所有地理字段
+            for loc_field in ["家乡", "当前坐标", "目标家乡", "目标当前坐标"]:
+                val = parsed_json.get(loc_field, '')
+                parsed_json[loc_field] = self.parse_location(val)
+                
+            return parsed_json
+            
+        except json.JSONDecodeError as decode_err:
+            print("chat_response 字符串不是有效的 JSON，错误如下：", decode_err)
+            return {}
+        except Exception as e:
+            print(f"处理过程中发生错误: {str(e)}")
+            return {}
+if __name__ == '__main__':  
+    extractor = UserLabelsExtractor()
+    chat_history=[
+        {
+            "role": "user",
+            "content": "我已经添加了你，现在我们可以开始聊天了。"
+        },
+        {
+            "role": "assistant",
+            "content": "哈喽哇😁，你是想脱单还是找搭子呢？"
+        },
+        {
+            "role": "assistant",
+            "content": "嗨呀，你要找个多大的哈？"
+        }
+    ]
+    labels = extractor.extract_user_labels(chat_history)
+    print(json.dumps(labels, ensure_ascii=False, indent=4))  # 打印提取的用户标签
