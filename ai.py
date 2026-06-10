@@ -6,7 +6,7 @@ import pandas as pd
 import re
 from prompt import chat_prompt, example
 
-os.environ["OPENAI_API_KEY"] = "2a5364ab-5afa-4639-932c-b915d0ee4ade"
+os.environ["OPENAI_API_KEY"] = ""
 
 class UserLabelsExtractor:
     def __init__(self):
