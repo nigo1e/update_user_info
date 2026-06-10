@@ -154,7 +154,7 @@ class UserLabelsExtractor:
     def __init__(self):
         self.client = OpenAI(
             base_url="https://ark.cn-beijing.volces.com/api/v3",
-            api_key="2a5364ab-5afa-4639-932c-b915d0ee4ade",
+            api_key="",
         )
         self.ageTag = ["00后", "95后", "90后", "85后", "80后"]
         # 年龄标签对应的出生年份阈值：2000+, 1995-1999, 1990-1994, 1985-1989, 1980-1984
