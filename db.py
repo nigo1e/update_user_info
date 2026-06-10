@@ -1,7 +1,7 @@
 import pymysql
 def get_conn():
     return pymysql.connect(
-        host='82.157.178.120',
+        host='',
         user='test123456',
         password='123456',
         database='wx_hongniang',
